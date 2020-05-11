@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29509.3
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Morpho", "Morpho.csproj", "{54393AF2-DD6E-48BB-9656-695CE7474099}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{54393AF2-DD6E-48BB-9656-695CE7474099}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{54393AF2-DD6E-48BB-9656-695CE7474099}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{54393AF2-DD6E-48BB-9656-695CE7474099}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{54393AF2-DD6E-48BB-9656-695CE7474099}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1B9A1226-4244-419F-91A1-365DF923C299}
+	EndGlobalSection
+EndGlobal
