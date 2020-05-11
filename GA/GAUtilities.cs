@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+ 
 using Grasshopper;
 using Grasshopper.Kernel.Data;
 using Rhino;
@@ -316,9 +317,11 @@ namespace Morpho
 
         }
 
-        public static void GetCaptures( List<Point3d> allPoints, List<Vector3d> allVectors, int width, int height, bool savefiles, out int captureSum)
+        public static double GetCaptures( List<Point3d> allPoints, List<Vector3d> allVectors, int width, int height, bool savefiles)
         {
-            captureSum = 0;
+            int captureSum = 0;
+            int total_sum = 0;
+           
             for (int i = 0; i < allPoints.Count; i++)
             {
                
@@ -340,19 +343,30 @@ namespace Morpho
                 }
 
                 //read all the pixels for each bitmap
+                 
                 for (int j = 0; j < width; j++)
                 {
                     for (int k = 0; k < height; k++)
                     {
-                        Color color = bit.GetPixel(j, k);
-                        if (color == Color.FromArgb(255, 0, 0))
-                            captureSum++;
+                        System.Drawing.Color color = bit.GetPixel(j, k);
+                        total_sum++;
 
+                        if (color == System.Drawing.Color.FromArgb(255, 0, 0))
+                        {
+                            captureSum++;
+                             
+                        }
                     }
 
                 }
+                
+ 
 
             }
+            double percentage = (double)captureSum / total_sum * 100;
+
+            return percentage;
         }
+         
     }
 }

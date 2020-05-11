@@ -79,7 +79,7 @@ namespace Morpho.GA
        // public static Genotype a;
        // public static Phenotype b;
         Population p;       
-        public static int PopulationNum =100;
+        public static int PopulationNum =50;
        
        
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
@@ -306,10 +306,14 @@ namespace Morpho.GA
                    
                 }
 
-               // GAUtilities.GetCaptures (FilteredPoints, FilteredVectors, Width, Height, Save_Captures, out int captureSum);
+                double part_fitness1 = GAUtilities.GetCaptures (FilteredPoints, FilteredVectors, 10,10, false);
     
-                double fitness = GAUtilities.RaysSum(FilteredLines, Search_Radius);
-                return fitness;
+                double part_fitness2 = GAUtilities.RaysSum(FilteredLines, Search_Radius);
+                double fitness = 0.5 * part_fitness1 + 0.5 * part_fitness2;
+                //RhinoApp.WriteLine("fitness from capture " + part_fitness1);
+               // RhinoApp.WriteLine("fitness from  rays" + part_fitness2);
+                //RhinoApp.WriteLine("_____________________________________");
+                return fitness; 
             }
         }
 
