@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Grasshopper.GUI.Canvas;
 using Grasshopper.Kernel;
-using Rhino.Geometry;
-using System.Linq;
-using Rhino;
 using Grasshopper.Kernel.Attributes;
-using Grasshopper.GUI.Canvas;
+using Rhino.Geometry;
+using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 
 namespace Morpho.GA
 {
@@ -21,7 +20,7 @@ namespace Morpho.GA
 
         public GA()
           :  base("Genetic Algorithm", "GA",
-              "Genetic Algorithm",
+              "The GA generates and optimizes a voxelized tower for obstraction,view or both.",
               "Morpho", "Optimization")
         {
         }
@@ -31,17 +30,16 @@ namespace Morpho.GA
         /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
-            pManager.AddBooleanParameter("Run", "RN", "Run the Genetic Algorithm", GH_ParamAccess.item,false);
-            pManager.AddRectangleParameter("Plot", "P", "The boundary rectangle of the building plot", GH_ParamAccess.item);
-            pManager.AddNumberParameter("BCR", "BCR", "building Coverage Ratio", GH_ParamAccess.item,0.5);
-            pManager.AddNumberParameter("FAR", "FAR", "Floor Aspect Ratio", GH_ParamAccess.item,600);
-            pManager.AddBooleanParameter("Reduce", "RD", "If true random voxels will be deleted from the final tower", GH_ParamAccess.item,false);
-           // pManager.AddIntegerParameter("U_Count", "U", "Number of segments in {u} direction", GH_ParamAccess.item,2);
-           // pManager.AddIntegerParameter("V_Count", "V", "Number of segments in {v} direction", GH_ParamAccess.item, 2);
-           // pManager.AddNumberParameter("Offset", "OF", "The distance of the division points from the edges of the voxel ", GH_ParamAccess.item, 0.1);
-            pManager.AddNumberParameter("Search_Radius", "SR", "The GA will search for other buildings inside the SR ", GH_ParamAccess.item, 200);
-            pManager.AddMeshParameter("Neighborhood", "N", "The building around the tower ", GH_ParamAccess.list);
-        
+            pManager.AddBooleanParameter("Run", "RN", "Add a button to Run,press once to create new population.", GH_ParamAccess.item,false);
+            pManager.AddRectangleParameter("Plot", "P", "The boundary rectangle of the building plot.", GH_ParamAccess.item);
+            pManager.AddNumberParameter("BCR", "BCR", "building Coverage Ratio.", GH_ParamAccess.item,0.5);
+            pManager.AddNumberParameter("FAR", "FAR", "Floor Aspect Ratio.", GH_ParamAccess.item,600);
+            pManager.AddBooleanParameter("Reduce", "RD", "If true random voxels will be deleted from the final tower.", GH_ParamAccess.item,false);          
+            pManager.AddNumberParameter("Search Radius", "SR", "The GA will search for other buildings inside the SR. ", GH_ParamAccess.item, 200);
+            pManager.AddMeshParameter("Neighborhood", "N", "The buildings around the tower. ", GH_ParamAccess.list);
+            pManager.AddIntegerParameter("Population_Number", "PN", "The number of individuals in the population.", GH_ParamAccess.item,50);
+            pManager.AddIntegerParameter("Objectives", "OB", "OB=0 optimize obstraction,0B=1 optimize view,OB=2 optimize both", GH_ParamAccess.item,0);
+
         }
 
         /// <summary>
@@ -49,14 +47,14 @@ namespace Morpho.GA
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-            pManager.AddBoxParameter("Best Tower", "BT", "The best tower in current generation", GH_ParamAccess.list);
-            pManager.AddNumberParameter("Best_Fitness", "BF", "The best fitness in current generation", GH_ParamAccess.item);
-            pManager.AddNumberParameter("Best Genotype", "BG", "The best genotype in current generation", GH_ParamAccess.list);
-            pManager.AddBoxParameter("All Towers", "AT", "All the towers in current generation", GH_ParamAccess.list);
-            pManager.AddNumberParameter("All Fitnesses", "AF", "The best fitness in current generation", GH_ParamAccess.list);
-            pManager.AddPointParameter("Positions", "PT", "Follow the positions of the towers as generations increase", GH_ParamAccess.list);
-            pManager.AddNumberParameter("Generations", "G", "The total number of generations", GH_ParamAccess.item);
-            pManager.AddPlaneParameter("Good Planes", "GP", "Good planes found through the GA", GH_ParamAccess.list);
+            pManager.AddBoxParameter("Best Tower", "BT", "The best tower in current generation.", GH_ParamAccess.list);
+            pManager.AddNumberParameter("Best Fitness", "BF", "The best fitness in current generation.", GH_ParamAccess.item);
+            pManager.AddBoxParameter("All Towers", "AT", "All the towers in current generation.", GH_ParamAccess.list);
+            pManager.AddNumberParameter("All Fitnesses", "AF", "The best fitness in current generation.", GH_ParamAccess.list);
+            pManager.AddPointParameter("Positions", "PT", "Follow the positions of the towers as generations increase.", GH_ParamAccess.list);
+            pManager.AddNumberParameter("Generations", "GN", "The total number of generations.", GH_ParamAccess.item);
+            pManager.AddPlaneParameter("Good Planes", "GP", "Good planes found through the GA.", GH_ParamAccess.list);
+            
         }
 
         ////////////////////// //Global Variables///////////////////////////////
@@ -65,6 +63,8 @@ namespace Morpho.GA
         public static double BCR, FAR;
         public static bool Reduce;     
         public static double Search_Radius;
+        public static int Objectives;
+        
         
         public static Random rnd = new Random();
         int Generations = -1;
@@ -75,13 +75,10 @@ namespace Morpho.GA
         public static List<Plane> GoodPlanes = new List<Plane>();
         public static List<Point3d> pts = new List<Point3d>();
 
-        //GA variables
-       // public static Genotype a;
-       // public static Phenotype b;
+        //GA variables  
         Population p;       
-        public static int PopulationNum =50;
-       
-       
+        public static int Population_Number =50;
+            
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
@@ -89,24 +86,22 @@ namespace Morpho.GA
             Plot = new Rectangle3d();
             BCR = 0;
             FAR = 0;
-            Reduce = false;        
-           // int U_Count = 0;
-            //int V_Count = 0;
-           // double Offset = 0;
+            Reduce = false;            
             Search_Radius = 0;
             List<Mesh> NeighborhoodList = new List<Mesh>();
+            
+            Population_Number = 50;
+            Objectives = 0;
 
             if (!DA.GetData(0, ref Run)) return;
             if (!DA.GetData(1, ref Plot)) return;
             if (!DA.GetData(2, ref BCR)) return;
             if (!DA.GetData(3, ref FAR)) return;
-            if (!DA.GetData(4, ref Reduce)) return;
-           // if (!DA.GetData(5, ref U_Count)) return;
-           // if (!DA.GetData(6, ref V_Count)) return;
-           // if (!DA.GetData(7, ref Offset)) return;
+            if (!DA.GetData(4, ref Reduce)) return;    
             if (!DA.GetData(5, ref Search_Radius)) return;
             if (!DA.GetDataList(6, NeighborhoodList)) return;
- 
+            if (!DA.GetData(7,  ref Population_Number)) return;
+            if (!DA.GetData(8, ref Objectives)) return;
 
             Mesh Neighborhood = new Mesh();
             if(NeighborhoodList.Count > 0)
@@ -122,16 +117,17 @@ namespace Morpho.GA
                 GoodPlanes.Clear();
                 //create new Population
                 p = new Population(Neighborhood);
-                Run = false;
+               
             }      
           
             p.Evolve();      
-            Generations++;      
-            DA.SetData(6, Generations);
+            Generations++;   
+            //output to see for how many generations the GA ran
+            DA.SetData(5, Generations);
             Towers.Clear();
             fitnesses.Clear();
-             pts.Clear();
-            GoodPlanes.Clear();
+            pts.Clear();
+            //GoodPlanes.Clear();
 
             //redraw the population
             for (int i = 0; i < p.pop.Length; i++)
@@ -151,23 +147,26 @@ namespace Morpho.GA
             DA.SetData(1, p.pop[p.pop.Length-1].i_fitness);
 
             //best genotype
-            List<double> BG = p.pop[p.pop.Length - 1].i_genotype.genes.ToList();
-            DA.SetDataList(2, BG);
+           // List<double> BG = p.pop[p.pop.Length - 1].i_genotype.genes.ToList();
+           // DA.SetDataList(2, BG);
 
             //To see all the towers of one generation
             List<Box> Individuals = Towers.SelectMany(x => x).ToList();
             //all towers
-            DA.SetDataList(3, Individuals);
+            DA.SetDataList(2, Individuals);
 
             //all fitnesses
-            DA.SetDataList(4,fitnesses);
+            DA.SetDataList(3,fitnesses);
 
             //all positions
-            DA.SetDataList(5, pts);
-
+            DA.SetDataList(4, pts);
+          
             //good planes
-            DA.SetDataList(7, GoodPlanes);
+            DA.SetDataList(6, GoodPlanes);
+            Rhino.RhinoApp.WriteLine(GoodPlanes.Count.ToString());
 
+
+             
 
         }
         //Genotype is an array of ints representing properties of the  Tower
@@ -210,39 +209,45 @@ namespace Morpho.GA
             public Phenotype(Genotype g)
             {
  
-                xmax = (BCR + BCR / 2) * Plot.Width;
-         
+                xmax = (BCR + BCR / 2) * Plot.Width;       
                 ymax = (BCR + BCR / 2) * Plot.Height;
      
+                //xb and xy define the width and height of the tower
                 xb = GAUtilities.Remap(g.genes[0], xmax, 1.2*xmax) ;        
                 yb = GAUtilities.Remap(g.genes[1], ymax, 1.2*ymax);
                 
+                //xpos and xy define the position of the tower inside the plot
                 xpos = GAUtilities.Remap(g.genes[2],-Plot.Width/2.5, Plot.Width/2.5);
                 ypos = GAUtilities.Remap(g.genes[3], -Plot.Height/2.5, Plot.Height/2.5);
               
-                x0 = GAUtilities.Remap(g.genes[4],0.2,0.9);  y0 = GAUtilities.Remap(g.genes[5], 0.3, 0.9);  z0 = GAUtilities.Remap(g.genes[6], 0.3, 0.9);
+                //x0,y0 ad z0 define the first point inside the boundary box of the tower that we will cut first(and so on)
+                x0 = GAUtilities.Remap(g.genes[4]);  y0 = GAUtilities.Remap(g.genes[5]);  z0 = GAUtilities.Remap(g.genes[6]);
                
-                x1 = GAUtilities.Remap(g.genes[7], 0.2, 0.9);  y1 = GAUtilities.Remap(g.genes[8], 0.3, 0.9);  z1 = GAUtilities.Remap(g.genes[9], 0.3, 0.9);
+                x1 = GAUtilities.Remap(g.genes[7]);  y1 = GAUtilities.Remap(g.genes[8]);  z1 = GAUtilities.Remap(g.genes[9]);
               
-                x2 = GAUtilities.Remap(g.genes[10], 0.2, 0.9);  y2 = GAUtilities.Remap(g.genes[11], 0.3, 0.9);  z2 = GAUtilities.Remap(g.genes[12], 0.3, 0.9);
+                x2 = GAUtilities.Remap(g.genes[10]);  y2 = GAUtilities.Remap(g.genes[11]);  z2 = GAUtilities.Remap(g.genes[12]);
                
-                x3 = GAUtilities.Remap(g.genes[13], 0.2, 0.9);  y3 = GAUtilities.Remap(g.genes[14], 0.3, 0.9);  z3 = GAUtilities.Remap(g.genes[15], 0.3, 0.9);
+                x3 = GAUtilities.Remap(g.genes[13]);  y3 = GAUtilities.Remap(g.genes[14]);  z3 = GAUtilities.Remap(g.genes[15]);
                 
-                //the less voxels we keep is 9 the maximum is 13
+                //the mininmum voxels we keep is 9, the maximum is 13
                 reduction_num = GAUtilities.Remap(g.genes[16], 9, 13);
-                rotation_num =  GAUtilities.Remap(g.genes[17], 9, 13);            
+               
+                //the mininmum voxels we rotate is, 9 the maximum is 13
+                rotation_num =  GAUtilities.Remap(g.genes[17], 9, 13);   
+                
+                //the minimum rotation angle is 45, the maximum is 345
                 angle_upper_limit = GAUtilities.Remap(g.genes[18], 45, 345);
 
                 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                //make the tower  
-                //the divided tower
+                
+                //the final tower is the representation of each individual
                 List<Box> DividedTower = new List<Box>();
-                DividedTower.AddRange(GAUtilities.ApplyStages(xb, yb, xpos, ypos, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, Plot, FAR, BCR));
-                Final_Tower =  CreateTower(DividedTower,Plot, BCR, Reduce);
+                DividedTower.AddRange(GAUtilities.ApplyStages(xb, yb, xpos, ypos, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, Plot, FAR));
+                Final_Tower =  CreateTower(DividedTower,Reduce);
 
             }
 
-            private List<Box> CreateTower(List<Box> DividedTower,Rectangle3d Plot, double BCR, bool Reduce)
+            private List<Box> CreateTower(List<Box> DividedTower, bool Reduce)
             {
                List<Box> Final_Towerin = new List<Box>();
                
@@ -269,18 +274,18 @@ namespace Morpho.GA
                 
                 return this.Final_Tower;
             }
-            public double Evaluate( Mesh Target, double search_rad)
+            public double Evaluate(Mesh Target, double search_rad)
             {
-                         
                 List<Point3d> points = new List<Point3d>();
                 List<Vector3d> vecs = new List<Vector3d>();
+
                 //the method created points in all 4 faces of each voxel(not the top and bottom)
                 //the useful ones are the ones that actually have some view to the exterior,not the ones inside the tower
-               GAUtilities.DivideBoxFaces2(Final_Tower, out List<Point3d> allPoints, out List<Vector3d> allVectors);
- 
+                GAUtilities.DivideBoxFaces2(Final_Tower, out List<Point3d> allPoints, out List<Vector3d> allVectors);
+
                 points.AddRange(allPoints);
                 vecs.AddRange(allVectors);
-               
+
                 List<Mesh> MeshVoxels = new List<Mesh>();
                 //Convert the  Tower voxels from boxes to meshes
                 for (int i = 0; i < Final_Tower.Count; i++)
@@ -294,25 +299,43 @@ namespace Morpho.GA
                 MeshTower.Append(MeshVoxels);
 
                 //the filter method will check the distances between the points and will return only the ones belonging to the outer faces
-                GAUtilities.Filter(points, vecs, Target, MeshTower, search_rad, out List< Line> FilteredLines,
+                GAUtilities.Filter(points, vecs, Target, MeshTower, search_rad, out List<Line> FilteredLines,
                     out List<Point3d> FilteredPoints, out List<Vector3d> FilteredVectors);
-                
+
+                //good planes from all the towers can give us an idea about the spots in the plot that have good views
                 for (int i = 0; i < FilteredLines.Count; i++)
                 {
-                    if (FilteredLines[i].Length / Search_Radius >= 0.90)
+                    if (FilteredLines[i].Length / Search_Radius > 0.90)
                     {
                         GoodPlanes.Add(new Plane(FilteredPoints[i], FilteredVectors[i]));
                     }
-                   
-                }
 
-                double part_fitness1 = GAUtilities.GetCaptures (FilteredPoints, FilteredVectors, 10,10, false);
-    
-                double part_fitness2 = GAUtilities.RaysSum(FilteredLines, Search_Radius);
-                double fitness = 0.5 * part_fitness1 + 0.5 * part_fitness2;
-                //RhinoApp.WriteLine("fitness from capture " + part_fitness1);
-               // RhinoApp.WriteLine("fitness from  rays" + part_fitness2);
-                //RhinoApp.WriteLine("_____________________________________");
+                }
+ 
+                double fitness;
+                double fitness1;
+                double fitness2;
+                if (Objectives == 0)
+                {
+                    //how unobstracted the views are from the tower?does it have buildings very close to it?
+                    //optmize for obstraction
+                    fitness = GAUtilities.RaysSum(FilteredLines, Search_Radius);
+                }
+                else if (Objectives == 1)
+                {
+                    //how much "red"(good views,landmarks,a mountain view etc) does the tower "sees"?
+                    //optimize for views
+                    fitness = GAUtilities.GetCaptures(FilteredPoints, FilteredVectors, 10, 10, false);
+                }
+                else
+                {
+                    //the final fitness is from 0 to 100 
+                    //the final fitness tries to compromise both objectives that are considered equally important
+                    fitness1=GAUtilities.RaysSum(FilteredLines, Search_Radius);
+                    fitness2 = GAUtilities.GetCaptures(FilteredPoints, FilteredVectors, 10, 10, false);
+                    fitness = 0.5 *fitness1 + 0.5 *fitness2;
+                }
+  
                 return fitness; 
             }
         }
@@ -331,11 +354,7 @@ namespace Morpho.GA
                 i_fitness = 0;
             }
 
-           // public List<Box> Draw()
-          //{
-           //     return i_phenotype.Draw();
-           //
-           // }
+           
 
             //Implement the CompareTo method looking for the biggest fitness
             public int CompareTo(Individual iToCompare)
@@ -363,14 +382,14 @@ namespace Morpho.GA
             {
   
                 this.Neighborhood = Neighborhood;
-                pop = new Individual[PopulationNum];
+                pop = new Individual[Population_Number];
 
-                for (int i = 0; i < PopulationNum; i++)
+                for (int i = 0; i < Population_Number; i++)
                 {
                     pop[i] = new Individual();                
                     pop[i].Evaluate(Neighborhood, Search_Radius);
                 }
-                //We sort the population based on the fitnsees as we defined in the Icomparable
+                //We sort the population based on the fitnesees as we defined in the Icomparable
                 Array.Sort(pop);
             }
 
@@ -379,7 +398,7 @@ namespace Morpho.GA
             {
                 Individual a, b, x,y;
                
-                for (int i = 0; i < PopulationNum; i++)
+                for (int i = 0; i < Population_Number; i++)
                 {
                     a = SelectIndividual();
                     b = SelectIndividual();
@@ -398,14 +417,14 @@ namespace Morpho.GA
                       pop[0] = y;
  
                     Array.Sort(pop);
-                   // RhinoApp.WriteLine("Best is:" + pop[PopulationNum-1].i_fitness.ToString());
+                
                 }
-               // RhinoApp.WriteLine("--------------and thats a wrap");
+               
             }
 
             public Individual SelectIndividual()
             {
-                int which = (int)Math.Floor(((double)PopulationNum - 1e-3) * (1.0 - Math.Pow((rnd.NextDouble()), 2)));
+                int which = (int)Math.Floor(((double)Population_Number - 1e-3) * (1.0 - Math.Pow((rnd.NextDouble()), 2)));
                 return pop[which];
             }
         }
@@ -432,7 +451,7 @@ namespace Morpho.GA
              baby1 = new Genotype();
              baby2 = new Genotype();
 
-            //the offspring get hapf of their genes from one parent and half from the other
+            //the offspring get half of their genes from one parent and half from the other
             for (int i = 0; i < 10; i++)
             {
                 baby1.genes[i] = a.genes[i];

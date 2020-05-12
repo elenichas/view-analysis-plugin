@@ -14,17 +14,21 @@ namespace Morpho
     public static class GAUtilities
     {
        public static double Remap(double x, double Min, double Max, double newMin, double newMax)
-        {
+       {
             double B = ((x - Min) / (Max - Min)) * (newMax - newMin) + newMin;
             return B;
-        }
+       }
 
         public static double Remap(double x, double newMin, double newMax)
         {
             return Remap(x,0,1,newMin,newMax);
         }
+        public static double Remap(double x)
+        {
+            return Remap(x, 0, 1, 0.3, 0.9);
+        }
         ////////////////////////////Functions to create the tower inside the GA//////////////////////////////////////////
-        public static Box MakeTowerVolume(double xbound, double ybound, double xpos, double ypos, Rectangle3d Plot, double FAR,double BCR)
+        public static Box MakeTowerVolume(double xbound, double ybound, double xpos, double ypos, Rectangle3d Plot, double FAR)
         {
           
             Interval x = new Interval(-xbound, xbound);
@@ -47,12 +51,12 @@ namespace Morpho
         //if stages =0 voxels = 2,stages = 1 voxels = 4....stages = 5  voxels = 64
         public static List<Box> ApplyStages(double xb, double yb,double xpos, double ypos, double x0, double y0, double z0,
             double x1, double y1, double z1, double x2, double y2, double z2,
-          double x3, double y3, double z3, Rectangle3d Plot, double FAR,double BCR)
+          double x3, double y3, double z3, Rectangle3d Plot, double FAR)
         {
              
             List<Box> Tower = new List<Box>();
 
-            Box Start = MakeTowerVolume(xb, yb, xpos, ypos, Plot, FAR,BCR);
+            Box Start = MakeTowerVolume(xb, yb, xpos, ypos, Plot, FAR);
             List<Box> temp = new List<Box>();
 
             // 2 voxels

@@ -24,7 +24,7 @@ namespace Morpho
         /// </summary>
         public ViewCapture()
           : base("ViewCapture", "ViewCapture",
-              "Capture viewshots from the points to the neighbouring buildings",
+              "Everything colored red, in your viewport, is considered a good view.Get captures from each point to check your tower's views. ",
               "Morpho", "Analysis")
         {
         }
@@ -38,12 +38,12 @@ namespace Morpho
             // You can often supply default values when creating parameters.
             // All parameters must have the correct access type. If you want 
             // to import lists or trees of values, modify the ParamAccess flag.
-            pManager.AddPointParameter("Filtered_Points", "FP", "The filtered points", GH_ParamAccess.list);
-            pManager.AddVectorParameter("Filtered_Vectors", "FV", "The filtered vectors", GH_ParamAccess.list);
+            pManager.AddPointParameter("Filtered_Points", "FP", "Captures will be taken from each filtered point", GH_ParamAccess.list);
+            pManager.AddVectorParameter("Filtered_Vectors", "FV", "The vectors on the filtered points", GH_ParamAccess.list);
             pManager.AddIntegerParameter("Width", "W", "The width in pixels of each saved capture", GH_ParamAccess.item, 20);
             pManager.AddIntegerParameter("Height", "H", "The height in pixels of each saved capture", GH_ParamAccess.item, 20);
             pManager.AddBooleanParameter("Save_Captures", "SC", "Keep false for faster performance", GH_ParamAccess.item, false);
-            pManager.AddBooleanParameter("Capture", "C", "Turn Capture to true,get the TCV and change to false", GH_ParamAccess.item, false);
+            pManager.AddBooleanParameter("Capture", "C", "Turn Capture to true,get the captures, and change back  to false", GH_ParamAccess.item, false);
             pManager.AddTextParameter("Path", "P", "The folder path to save the captures", GH_ParamAccess.item);
 
 
@@ -138,7 +138,7 @@ namespace Morpho
                     {
                         Color color = bit.GetPixel(j, k);
                         total_sum++;
-                       
+                       //all the objects considered good view(like landmakrs) should be colored red in Rhino
                         if (color == Color.FromArgb(255, 0, 0))
                         {
                             captureSum++;
@@ -149,14 +149,17 @@ namespace Morpho
                 }
                 double perc = (double)point_sum/(double)(width*height);
                
+                //'bad" views
                 if (perc < 0.333)
                 {
                     Colors.Add(Color.FromArgb(255,126,0));
                 }
+                //"average" views
                 else if (perc < 0.666)
                 {
                     Colors.Add(Color.FromArgb(253, 255, 74));
                 }
+                //"good" views
                 else
                 {
                     Colors.Add(Color.FromArgb(102, 255, 86));

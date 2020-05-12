@@ -13,7 +13,7 @@ namespace Morpho
         /// </summary>
         public TowerBuilder()
           : base("TowerBuilder", "TB",
-              "TowerBuilder",
+              "Creates the voxelized tower,add a timer to get different towers.",
               "Morpho", "Design")
         {
         }
@@ -23,13 +23,13 @@ namespace Morpho
         /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
-            pManager.AddRectangleParameter("Plot", "P", "Base Rectangle for tower", GH_ParamAccess.item);
-            pManager.AddNumberParameter("BCR", "BCR", "Building Coverage Ratio", GH_ParamAccess.item,0.5);
-            pManager.AddNumberParameter("FAR", "FAR", "Floor Aspect Ratio", GH_ParamAccess.item,700);
-            pManager.AddIntegerParameter("Stages", "S", "NUmber of operations to apply to initial volume", GH_ParamAccess.item,4);
+            pManager.AddRectangleParameter("Plot", "P", "The boundary rectangle of the plot.", GH_ParamAccess.item);
+            pManager.AddNumberParameter("BCR", "BCR", "Building Coverage Ratio.", GH_ParamAccess.item,0.5);
+            pManager.AddNumberParameter("FAR", "FAR", "Floor Aspect Ratio.", GH_ParamAccess.item,700);
+            pManager.AddIntegerParameter("Division Steps", "DS", "Number of operations to apply to initial volume,for DS=4 you get 32 voxels.", GH_ParamAccess.item,4);
             pManager.AddBooleanParameter("Reduce", "RD", "If true some voxels get deleted, if False output will be a solid tower.", GH_ParamAccess.item, true);
-            pManager.AddIntegerParameter("Reduction_max", "RDMX", "The number of voxels to be deleted", GH_ParamAccess.item,1);
-            pManager.AddIntegerParameter("Rotation_max", "RDMX", "The number of voxels to be rotated", GH_ParamAccess.item, 1);
+            pManager.AddIntegerParameter("Reduction Max", "RDMX", "The number of voxels to be deleted.", GH_ParamAccess.item,1);
+            pManager.AddIntegerParameter("Rotation Max", "RDMX", "The number of voxels to be rotated.", GH_ParamAccess.item, 1);
         }
 
         /// <summary>
@@ -37,12 +37,14 @@ namespace Morpho
         /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
-            pManager.AddBoxParameter("Tower", "T", "The  tower made of boxes", GH_ParamAccess.list);
+            pManager.AddBoxParameter("Tower", "T", "The final voxelized tower.", GH_ParamAccess.list);
+            pManager.AddTextParameter("Tower Info","TI", "Basic information for the output tower", GH_ParamAccess.item);
 
         }
 
-        // Variables
+        // Global Variables
         Random rnd;
+        public static double floors;
          
         /// <summary>
         /// This is the method that actually does the work.
@@ -59,6 +61,7 @@ namespace Morpho
             bool Reduce = true;
             int Reduction_max = 6;
             int Rotation_max = 6;
+            floors = 0;
 
             if (!DA.GetData(0, ref Plot)) return;
             if (!DA.GetData(1, ref BCR)) return;
@@ -74,6 +77,7 @@ namespace Morpho
             //list after random voxels removed
             List<Box> DividedTowerR = RandomReduce(DividedTower,Reduction_max);
           
+            //list after random voxels rotated
             List<Box> Final_Tower;
 
             if (Reduce)
@@ -81,32 +85,30 @@ namespace Morpho
             else
                 Final_Tower = Rotate(DividedTower,Rotation_max);
 
-
             DA.SetDataList(0, Final_Tower);
+
+
+            //Tower info
+            string info = floors.ToString() + " floors tower, with total height of " + (floors * 4.5).ToString() + "m. and " + Final_Tower.Count.ToString() + " voxels.";
+            DA.SetData(1, info);
         }
 
         public Box MakeTowerVolume(Rectangle3d Plot, double BCR, double FAR)
         {
             //how much from the Plot can be covered with a building
-            //Building Coverage Ratio = (Building Area/Site Area)* 100
-            Rectangle3d Cover = new Rectangle3d(new Plane(Plot.Plane), Plot.Width * BCR, Plot.Height * BCR);
+            //Building Coverage Ratio = (Building Area/Site Area)* 100          
             var xmax = (BCR + BCR / 2) * Plot.Width;
+            var ymax = (BCR + BCR / 2) * Plot.Height;
 
-           var  ymax = (BCR + BCR / 2) * Plot.Height;
+           var xbound = rnd.Next((int)xmax, (int)(1.2 * xmax));
+           var ybound = rnd.Next((int)ymax, (int)(1.2 * ymax));
 
-           var  xbound = rnd.Next((int)xmax, (int)(1.2 * xmax));
-            var ybound = rnd.Next((int)ymax, (int)(1.2 * ymax));
-
-
-            //var xbound = rnd.Next((int)xmax / 3, (int)ymax / 2);
-            // var ybound = rnd.Next((int)ymax / 3, (int)ymax / 2);
-
-            Interval x = new Interval(-xbound, xbound);
-            Interval y = new Interval(-ybound, ybound);
+           Interval x = new Interval(-xbound, xbound);
+           Interval y = new Interval(-ybound, ybound);
 
             //Floor Aspect Ratio  = (Total Floor Area/ Site Area)*100
             var TFA = FAR * Plot.Area / 100;
-            var floors = (int)(TFA / (x.Length * y.Length));
+            floors = (int)(TFA / (x.Length * y.Length));
             var zmax = floors * 4.5;
 
             Interval z = new Interval(0, zmax);
@@ -115,11 +117,11 @@ namespace Morpho
             var xpos = rnd.Next(-(int)(Plot.Width / 3),(int) (Plot.Width / 3));
             var ypos = rnd.Next(-(int)(Plot.Height/ 3), (int)(Plot.Height / 3));
      
-            //the general volume of the tower
+            //the general volume of the tower(boundary box)
             Box Start = new Box(new Plane(new Point3d(xpos, ypos, 0), Vector3d.ZAxis), x, y, z);
 
-            return Start;
 
+            return Start;
         }
 
         //call the divide method to create a more detailed tower
@@ -161,7 +163,9 @@ namespace Morpho
             
             var values = new List<String>() { "X", "Y", "Z" };
             var keys = new double[] { Start.X.Length, Start.Y.Length, Start.Z.Length };
-            // https://stackoverflow.com/questions/1760185/c-sharp-sort-list-while-also-returning-the-original-index-positions
+            
+            //Every time I perform an intersection I want to cut the volume to its longest side
+            //https://stackoverflow.com/questions/1760185/c-sharp-sort-list-while-also-returning-the-original-index-positions
             var sorted = values.OrderBy(i => keys[values.IndexOf(i)]).ToList();
             switch (sorted.Last())
             {
@@ -266,10 +270,6 @@ namespace Morpho
 
         }
 
-        
-
-
-        
 
         /// <summary>
         /// Provides an Icon for the component.
