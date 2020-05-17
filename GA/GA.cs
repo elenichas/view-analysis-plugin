@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 
+
 namespace Morpho.GA
 {
     public class GA : GH_Component
@@ -37,14 +38,13 @@ namespace Morpho.GA
             pManager.AddBooleanParameter("Reduce", "RD", "If true random voxels will be deleted from the final tower.", GH_ParamAccess.item,false);          
             pManager.AddNumberParameter("Search Radius", "SR", "The GA will search for other buildings inside the SR. ", GH_ParamAccess.item, 200);
             pManager.AddMeshParameter("Neighborhood", "N", "The buildings around the tower. ", GH_ParamAccess.list);
-            pManager.AddIntegerParameter("Population_Number", "PN", "The number of individuals in the population.", GH_ParamAccess.item,50);
+            pManager.AddIntegerParameter("Population Number", "PN", "The number of individuals in the population.", GH_ParamAccess.item,50);
             pManager.AddIntegerParameter("Objectives", "OB", "OB=0 optimize obstraction,0B=1 optimize view,OB=2 optimize both", GH_ParamAccess.item,0);
 
         }
 
-        /// <summary>
-        /// Registers all the output parameters for this component.
-        /// </summary>
+   
+        /// Registers all the output parameters for this component.  
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
             pManager.AddBoxParameter("Best Tower", "BT", "The best tower in current generation.", GH_ParamAccess.list);
@@ -106,8 +106,7 @@ namespace Morpho.GA
             Mesh Neighborhood = new Mesh();
             if(NeighborhoodList.Count > 0)
                Neighborhood.Append(NeighborhoodList);
-           
-            
+                    
             if (Run)
             {
                 Generations = -1;
@@ -124,11 +123,10 @@ namespace Morpho.GA
             Generations++;   
             //output to see for how many generations the GA ran
             DA.SetData(5, Generations);
+           
             Towers.Clear();
             fitnesses.Clear();
-            pts.Clear();
-            //GoodPlanes.Clear();
-
+ 
             //redraw the population
             for (int i = 0; i < p.pop.Length; i++)
             {
@@ -148,7 +146,6 @@ namespace Morpho.GA
 
             //best genotype
            // List<double> BG = p.pop[p.pop.Length - 1].i_genotype.genes.ToList();
-           // DA.SetDataList(2, BG);
 
             //To see all the towers of one generation
             List<Box> Individuals = Towers.SelectMany(x => x).ToList();
@@ -163,11 +160,7 @@ namespace Morpho.GA
           
             //good planes
             DA.SetDataList(6, GoodPlanes);
-            Rhino.RhinoApp.WriteLine(GoodPlanes.Count.ToString());
-
-
-             
-
+  
         }
         //Genotype is an array of ints representing properties of the  Tower
         //it is the DNA of the tower
@@ -185,18 +178,33 @@ namespace Morpho.GA
             }
 
             //Randomly change one property(gene value) to mantain diversity in the population
+            //i tried different types of mutation: 
+            //1.mutation rate for individuals 10% and for their genes 5%
+            //2.muatation rate for both individuals and their genes 5%
+           
+            //3.After noticing that the GA converges too soon to a specific position in the plot I kept the 
+            //10% mutation for individuals and allow to change the genes completely
+            //This mutation helped preserve more variety in term of positions and for more generations
+
             public void Mutate()
             {
-                for (int i = 0; i < genes.Length; i++)
-                {
-                    //2% mutation rate
-                    if (rnd.Next(100) < 5)
-                        genes[i] = rnd.NextDouble();                   
+                //10% global mutation rate
+                if (rnd.Next(100) < 10)
+                {                  
+                    for (int i = 0; i < genes.Length; i++)
+                    {
+                        //5% local mutation rate
+                       // if (rnd.Next(100) < 5)
+                       // {
+
+                            genes[i] = rnd.NextDouble();
+                       // }
+                    }
                 }
             }
         }
 
-        //Phenotype is the representation of each individual,in our case a Circle
+        //Phenotype is the representation of each individual,in our case a Tower
         public class Phenotype
         {
             //maximum dimensions and boundaries for the Tower
@@ -411,7 +419,8 @@ namespace Morpho.GA
 
                     //evaluate the two offsprings and compare them
                     //the fittest will survive into the population
-                    if (x.i_fitness >= y.i_fitness)
+                   if (x.i_fitness >= y.i_fitness)
+               
                        pop[0] = x;
                      else
                       pop[0] = y;
@@ -452,17 +461,22 @@ namespace Morpho.GA
              baby2 = new Genotype();
 
             //the offspring get half of their genes from one parent and half from the other
-            for (int i = 0; i < 10; i++)
+            if (rnd.NextDouble() > 0.5)
             {
-                baby1.genes[i] = a.genes[i];
-                baby2.genes[i] = b.genes[i];
-            }
+            
+                for (int i = 0; i < 10; i++)
+                {
+                    baby1.genes[i] = a.genes[i];
+                    baby2.genes[i] = b.genes[i];
+                }
 
-            for (int i = 10; i < 19; i++)
-            {
-                baby1.genes[i] = b.genes[i];
-                baby2.genes[i] = a.genes[i];
+                for (int i = 10; i < 19; i++)
+                {
+                    baby1.genes[i] = b.genes[i];
+                    baby2.genes[i] = a.genes[i];
+                }
             }
+            
         
         }
 

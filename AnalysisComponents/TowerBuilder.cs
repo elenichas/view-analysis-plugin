@@ -12,44 +12,36 @@ namespace Morpho
         /// Initializes a new instance of the MyComponent1 class.
         /// </summary>
         public TowerBuilder()
-          : base("TowerBuilder", "TB",
+          : base("Tower Builder", "Tower Builder",
               "Creates the voxelized tower,add a timer to get different towers.",
               "Morpho", "Design")
         {
         }
 
-        /// <summary>
         /// Registers all the input parameters for this component.
-        /// </summary>
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
             pManager.AddRectangleParameter("Plot", "P", "The boundary rectangle of the plot.", GH_ParamAccess.item);
             pManager.AddNumberParameter("BCR", "BCR", "Building Coverage Ratio.", GH_ParamAccess.item,0.5);
             pManager.AddNumberParameter("FAR", "FAR", "Floor Aspect Ratio.", GH_ParamAccess.item,700);
-            pManager.AddIntegerParameter("Division Steps", "DS", "Number of operations to apply to initial volume,for DS=4 you get 32 voxels.", GH_ParamAccess.item,4);
-            pManager.AddBooleanParameter("Reduce", "RD", "If true some voxels get deleted, if False output will be a solid tower.", GH_ParamAccess.item, true);
+            pManager.AddIntegerParameter("Division Steps", "DS", "Number of operations to apply false output will be a solid tower.", GH_ParamAccess.item);
+            pManager.AddBooleanParameter("Reduce", "R", "When true it allows the reduction of some voxels from the tower.", GH_ParamAccess.item);
             pManager.AddIntegerParameter("Reduction Max", "RDMX", "The number of voxels to be deleted.", GH_ParamAccess.item,1);
             pManager.AddIntegerParameter("Rotation Max", "RDMX", "The number of voxels to be rotated.", GH_ParamAccess.item, 1);
         }
-
-        /// <summary>
+ 
         /// Registers all the output parameters for this component.
-        /// </summary>
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
         {
             pManager.AddBoxParameter("Tower", "T", "The final voxelized tower.", GH_ParamAccess.list);
-            pManager.AddTextParameter("Tower Info","TI", "Basic information for the output tower", GH_ParamAccess.item);
+            pManager.AddTextParameter("Tower Info","TI", "Basic information for the output tower.", GH_ParamAccess.item);
 
         }
 
         // Global Variables
         Random rnd;
         public static double floors;
-         
-        /// <summary>
-        /// This is the method that actually does the work.
-        /// </summary>
-        /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
+ 
         protected override void SolveInstance(IGH_DataAccess DA)
         {
             
@@ -57,7 +49,7 @@ namespace Morpho
             Rectangle3d Plot = new Rectangle3d();
             double BCR = 0; 
             double FAR = 0;
-            int Stages = 1;
+            int Division_Steps = 1;
             bool Reduce = true;
             int Reduction_max = 6;
             int Rotation_max = 6;
@@ -66,13 +58,13 @@ namespace Morpho
             if (!DA.GetData(0, ref Plot)) return;
             if (!DA.GetData(1, ref BCR)) return;
             if (!DA.GetData(2, ref FAR)) return;
-            if (!DA.GetData(3, ref Stages)) return;
+            if (!DA.GetData(3, ref Division_Steps)) return;
             if (!DA.GetData(4, ref Reduce)) return;
             if (!DA.GetData(5, ref Reduction_max)) return;
             if (!DA.GetData(6, ref Rotation_max)) return;
 
             //list with the divided tower
-            List<Box> DividedTower = ApplyStages(Plot, BCR, FAR, Stages);
+            List<Box> DividedTower = ApplyStages(Plot, BCR, FAR, Division_Steps);
           
             //list after random voxels removed
             List<Box> DividedTowerR = RandomReduce(DividedTower,Reduction_max);
@@ -87,12 +79,20 @@ namespace Morpho
 
             DA.SetDataList(0, Final_Tower);
 
-
-            //Tower info
-            string info = floors.ToString() + " floors tower, with total height of " + (floors * 4.5).ToString() + "m. and " + Final_Tower.Count.ToString() + " voxels.";
-            DA.SetData(1, info);
+            string info;
+            if (Final_Tower.Count > 0)
+            {
+                //Tower info
+                info = floors.ToString() + " floors tower, with total height of " + (floors * 4.5).ToString() + "m. and " + Final_Tower.Count.ToString() + " voxels.";
+            }
+            else
+            {
+                info = "Empty tower";
+            }
+                DA.SetData(1, info);
         }
 
+        //this method return the initial boundary volume
         public Box MakeTowerVolume(Rectangle3d Plot, double BCR, double FAR)
         {
             //how much from the Plot can be covered with a building
@@ -124,9 +124,9 @@ namespace Morpho
             return Start;
         }
 
-        //call the divide method to create a more detailed tower
+        //This method divided the boundary volume to smaller voxels
         //if stages =0 voxels = 2,stages = 1 voxels = 4....stages = 5  voxels = 64
-        public List<Box> ApplyStages(Rectangle3d Plot, double BCR, double FAR, int Stages)
+        public List<Box> ApplyStages(Rectangle3d Plot, double BCR, double FAR, int Division_Steps)
         {
             List<List<Box>> Tower = new List<List<Box>>();
             List<Box> temp = new List<Box>();
@@ -134,10 +134,10 @@ namespace Morpho
             Box Start = MakeTowerVolume(Plot, BCR, FAR);
 
             temp.AddRange(Divide(Start));
-            //Tower[0]
+           
             Tower.Add(temp);
 
-            for (int i = 0; i < Stages; i++)
+            for (int i = 0; i < Division_Steps; i++)
             {
                 List<Box> temp1 = new List<Box>();
                 foreach (var item in Tower[i])
@@ -147,10 +147,11 @@ namespace Morpho
 
                 Tower.Add(temp1);
             }
-            return Tower[Stages];
+            return Tower[Division_Steps];
         }
 
-        //Divide each voxel face into points
+       //This method creates a points inside every box and a plane 
+       //the point and the plane will define how the box will be intersected
         public List<Box> Divide(Box Start)
         {
             //convert the starting box to a brep
@@ -209,7 +210,7 @@ namespace Morpho
             return newboxes;
         }
 
-        //Delete some voxels randomly(20% probability to delete)
+        //Delete some voxels randomly
         public List<Box> RandomReduce(List<Box> DividedTower,int reduction_max)
         {
             if (reduction_max > DividedTower.Count - 1)
@@ -269,24 +270,19 @@ namespace Morpho
             return copy;
 
         }
-
-
-        /// <summary>
+ 
         /// Provides an Icon for the component.
-        /// </summary>
         protected override System.Drawing.Bitmap Icon
         {
             get
             {
-                //You can add image files to your project resources and access them like this:
+                 
                 return Morpho.Properties.Resources.Divide;
-              // return null;
+              
             }
         }
-
-        /// <summary>
-        /// Gets the unique ID for this component. Do not change this ID after release.
-        /// </summary>
+ 
+        /// Gets the unique ID for this component. Do not change this ID after release.  
         public override Guid ComponentGuid
         {
             get { return new Guid("86b9490f-f756-46ce-ab54-35dc5c9e3216"); }

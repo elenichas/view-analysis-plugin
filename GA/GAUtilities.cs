@@ -2,13 +2,11 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
- 
-using Grasshopper;
-using Grasshopper.Kernel.Data;
 using Rhino;
 using Rhino.Geometry;
  
-
+//Most of the GA Utilities methods are similar to the ones used for the Design and Analysis Components
+//I have made certain alterations so they can work inside the GA
 namespace Morpho
 {
     public static class GAUtilities
@@ -28,6 +26,8 @@ namespace Morpho
             return Remap(x, 0, 1, 0.3, 0.9);
         }
         ////////////////////////////Functions to create the tower inside the GA//////////////////////////////////////////
+       
+        //This method creates the boundary volume
         public static Box MakeTowerVolume(double xbound, double ybound, double xpos, double ypos, Rectangle3d Plot, double FAR)
         {
           
@@ -53,7 +53,9 @@ namespace Morpho
             double x1, double y1, double z1, double x2, double y2, double z2,
           double x3, double y3, double z3, Rectangle3d Plot, double FAR)
         {
-             
+            //I hardcoded the length of the tower list to allow only the creation of towers with 16 voxels
+            //The Tower builder component works for any number of voxels but the GA was very slow for bigger tower lists
+
             List<Box> Tower = new List<Box>();
 
             Box Start = MakeTowerVolume(xb, yb, xpos, ypos, Plot, FAR);
@@ -135,7 +137,7 @@ namespace Morpho
             return newboxes;
         }
 
-        //Delete some voxels randomly(20% probability to delete)
+        //Delete some voxels randomly 
         public static List<Box> RandomReduce(List<Box> DividedTower, double reduction_max)
         {         
             List<Box> ReducedTower = new List<Box>();
@@ -190,6 +192,9 @@ namespace Morpho
         }
         ////////////////////////////Functions to create points on the faces of each voxel//////////////////////////////////////////
 
+        //To make the Ga run faster I decided to create only one point from every box face
+        //The actual DivideBoxFaces method below works with the GA but it took a lot of time 
+        //For time management reason I decided to do this simplification
         public static void DivideBoxFaces2(List<Box> Boxes, out List <Point3d> allPoints, out List <Vector3d> allVectors)
         {
             allPoints = new List<Point3d>();
@@ -214,7 +219,6 @@ namespace Morpho
         
         public static void DivideBoxFaces(List<Box> Boxes, int U_Count, int V_Count, double offset, out List <Point3d> allPoints, out List <Vector3d> allVectors)
         {
- 
             //all the points of a box
             allPoints = new List<Point3d>();
 
@@ -258,8 +262,7 @@ namespace Morpho
          
         }
 
-        //this nethod will take the points created on the faces of boxes and will give back only the
-        //usefull ones for the evaluation(delete points in faces inside the tower volume
+        //Filter the points to keep only the ones that belong to exterior surfaces
         public static void Filter(List<Point3d> allPoints, List<Vector3d> allVectors, Mesh Buildings, Mesh Tower, double search_rad,
           out List<Line> FilteredLines, out List<Point3d> FilteredPoints, out List<Vector3d> FilteredVectors)
         {
@@ -338,16 +341,8 @@ namespace Morpho
                 var view = RhDocument.Views.ActiveView;
                
                 Bitmap bit = view.CaptureToBitmap(new Size(width, height), false, false, false);
-
-                //Don't save the image to run faster
-                if (savefiles)
-                {
-                    string FName = @"C:\Users\Eleni\Desktop\New folder (2)\point" + i.ToString() + ".jpg";
-                    bit.Save(FName);
-                }
-
-                //read all the pixels for each bitmap
-                 
+           
+                //read all the pixels for each bitmap               
                 for (int j = 0; j < width; j++)
                 {
                     for (int k = 0; k < height; k++)
