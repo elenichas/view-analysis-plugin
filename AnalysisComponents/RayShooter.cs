@@ -1,204 +1,323 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Grasshopper.Kernel;
-using Rhino.Geometry;
-using System.Drawing;
-
-namespace Morpho.AnalysisComponents
+﻿namespace Morpho.AnalysisComponents
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Drawing;
+    using System.Linq;
+    using Grasshopper.Kernel;
+    using Rhino.Geometry;
+
+    /// <summary>
+    /// Defines the <see cref="RayShooter" />
+    /// </summary>
     public class RayShooter : GH_Component
     {
-        
-        /// Initializes a new instance of the MyComponent1 class.      
-        public RayShooter()
-          : base("Ray Shooter", "Ray Shooter",
-              "Shoots rays to neighbooring buildings to check view obstraction",
-              "Morpho", "Analysis")
-        {
-        }
-    
-        /// Registers all the input parameters for this component.    
-        protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
-        {
-            pManager.AddBrepParameter("Tower", "T", "The  tower made of boxes(voxels).", GH_ParamAccess.list);
-            pManager.AddMeshParameter("Neighborhood", "N", "All the buildings around the tower or other obstacles.", GH_ParamAccess.list);
-            pManager.AddPointParameter("Points", "P", "The initial division points that will be filtered.", GH_ParamAccess.list);
-            pManager.AddVectorParameter("Vectors", "V", "The normal vectors on the points.", GH_ParamAccess.list);
-            pManager.AddNumberParameter("Search Radius", "SR", "The maximum length of the rays.", GH_ParamAccess.item, 200);
-        }
-
-      
-        /// Registers all the output parameters for this component.   
-        protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
-        {
-            pManager.AddLineParameter("Rays", "R", "The rays from the tower to surounding buildings.", GH_ParamAccess.list);
-            pManager.AddNumberParameter("Total Ray Value", "TRV", " Bigger TRV indicates a less obstracted view,maximum value is 100.", GH_ParamAccess.item);
-            pManager.AddPointParameter("Filtered Points", "FP", "The filtered points (only in exterior facades).", GH_ParamAccess.list);
-            pManager.AddVectorParameter("Filtered Vectors", "FV", "The normal vectors on filtered points.", GH_ParamAccess.list);
-            pManager.AddColourParameter("Colors", "COL", "Colors indicating the view from each point, red=bad, orange=medium, green=good.", GH_ParamAccess.list);
-
-        }
-
-        public static List<Brep> Tower;
-        public static List<Mesh> Neighborhood;
-        public static List<Point3d> Points;
-        public static List<Vector3d> Vectors;
-        public static double Search_Radius;
+        /// Initializes a new instance of the RayShooter class.
 
         /// <summary>
-        /// This is the method that actually does the work.
+        /// Initializes a new instance of the <see cref="RayShooter"/> class.
         /// </summary>
-        /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
+        public RayShooter()
+            : base(
+                "Ray Shooter",
+                "Ray Shooter",
+                "Shoots rays to neighboring buildings to check view obstruction",
+                "Morpho",
+                "Analysis"
+            ) { }
+
+        /// Registers all the input parameters for this component.
+
+        /// <summary>
+        /// The RegisterInputParams
+        /// </summary>
+        /// <param name="pManager">The pManager<see cref="GH_Component.GH_InputParamManager"/></param>
+        protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
+        {
+            pManager.AddBrepParameter(
+                "Tower",
+                "T",
+                "The tower made of boxes (voxels).",
+                GH_ParamAccess.list
+            );
+            pManager.AddMeshParameter(
+                "Neighborhood",
+                "N",
+                "All the buildings around the tower or other obstacles.",
+                GH_ParamAccess.list
+            );
+            pManager.AddPointParameter(
+                "Points",
+                "P",
+                "The initial division points to filter.",
+                GH_ParamAccess.list
+            );
+            pManager.AddVectorParameter(
+                "Vectors",
+                "V",
+                "Normal vectors at the points.",
+                GH_ParamAccess.list
+            );
+            pManager.AddNumberParameter(
+                "Search Radius",
+                "SR",
+                "Maximum length of the rays.",
+                GH_ParamAccess.item,
+                200
+            );
+        }
+
+        /// Registers all the output parameters for this component.
+
+        /// <summary>
+        /// The RegisterOutputParams
+        /// </summary>
+        /// <param name="pManager">The pManager<see cref="GH_Component.GH_OutputParamManager"/></param>
+        protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
+        {
+            pManager.AddLineParameter(
+                "Rays",
+                "R",
+                "Rays from the tower to surrounding buildings.",
+                GH_ParamAccess.list
+            );
+            pManager.AddNumberParameter(
+                "Total Ray Value",
+                "TRV",
+                "Larger TRV indicates less obstructed view; maximum is 100.",
+                GH_ParamAccess.item
+            );
+            pManager.AddPointParameter(
+                "Filtered Points",
+                "FP",
+                "Filtered points (only on exterior facades).",
+                GH_ParamAccess.list
+            );
+            pManager.AddVectorParameter(
+                "Filtered Vectors",
+                "FV",
+                "Normal vectors at filtered points.",
+                GH_ParamAccess.list
+            );
+            pManager.AddColourParameter(
+                "Colors",
+                "COL",
+                "Colors indicating view quality from each point (red=bad, green=good).",
+                GH_ParamAccess.list
+            );
+        }
+
+        /// <summary>
+        /// Main logic method that performs ray shooting
+        /// </summary>
+        /// <param name="DA">The DA<see cref="IGH_DataAccess"/></param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
-            Tower = new List<Brep>();
-            Neighborhood = new List<Mesh>();
-            Points = new List<Point3d>();
-            Vectors = new List<Vector3d>();
-            Search_Radius = 200;
+            // Input data retrieval
+            List<Brep> tower = new List<Brep>();
+            List<Mesh> neighborhood = new List<Mesh>();
+            List<Point3d> points = new List<Point3d>();
+            List<Vector3d> vectors = new List<Vector3d>();
+            double searchRadius = 200;
 
+            if (!DA.GetDataList(0, tower))
+                return;
+            if (!DA.GetDataList(1, neighborhood))
+                return;
+            if (!DA.GetDataList(2, points))
+                return;
+            if (!DA.GetDataList(3, vectors))
+                return;
+            if (!DA.GetData(4, ref searchRadius))
+                return;
 
-            if (!DA.GetDataList(0,  Tower)) return;
-            if (!DA.GetDataList(1,  Neighborhood)) return;
-            if (!DA.GetDataList(2,  Points)) return;
-            if (!DA.GetDataList(3,  Vectors)) return;
-            if (!DA.GetData(4, ref Search_Radius)) return;
+            // Mesh preparation
+            Mesh joinedNeighborhood = JoinMeshes(neighborhood);
+            Mesh towerMesh = MeshTower(tower);
 
-            //join the neighborhood meshes into  one mesh               
-            Mesh JoinedNeighborhood = new Mesh();
-            JoinedNeighborhood.Append(Neighborhood);
-           
-            //convert the tower to one joined mesh
-            Mesh MeshT = MeshTower(Tower);
-            //get the rays
-            Filter(Points, Vectors, JoinedNeighborhood, MeshT, Search_Radius, out List<Line> FilteredLines, out List<Point3d> FilteredPoints,out List<Vector3d> FilteredVectors);
-            //get the rays sum
-            double Sum = RaysSum(FilteredLines, Search_Radius);
-           
-            DA.SetDataList(0, FilteredLines);
-            DA.SetData(1, Sum);
-            DA.SetDataList(2, FilteredPoints);
-            DA.SetDataList(3, FilteredVectors);
-            DA.SetDataList(4,ColorPoints(FilteredLines));
+            // Filter points and generate rays
+            FilterPoints(
+                points,
+                vectors,
+                joinedNeighborhood,
+                towerMesh,
+                searchRadius,
+                out List<Line> filteredLines,
+                out List<Point3d> filteredPoints,
+                out List<Vector3d> filteredVectors
+            );
+
+            // Calculate visibility value and colors
+            double visibilityValue = CalculateRayVisibility(filteredLines, searchRadius);
+            List<Color> colorMapping = GenerateColorMapping(filteredLines, searchRadius);
+
+            // Set output data
+            DA.SetDataList(0, filteredLines);
+            DA.SetData(1, visibilityValue);
+            DA.SetDataList(2, filteredPoints);
+            DA.SetDataList(3, filteredVectors);
+            DA.SetDataList(4, colorMapping);
         }
 
-        //Convert the  Tower voxels from boxes to meshes
-        public Mesh MeshTower(List <Brep> BoxTower)
+        /// <summary>
+        /// Joins multiple meshes into one
+        /// </summary>
+        /// <param name="meshes">The meshes<see cref="List{Mesh}"/></param>
+        /// <returns>The <see cref="Mesh"/></returns>
+        private Mesh JoinMeshes(List<Mesh> meshes)
         {
-            List<Mesh> allMeshes = new List<Mesh>();            
-            for (int i = 0; i < BoxTower.Count; i++)
+            Mesh joinedMesh = new Mesh();
+            joinedMesh.Append(meshes);
+            return joinedMesh;
+        }
+
+        /// <summary>
+        /// Converts the tower voxels (Brep) to a single joined mesh
+        /// </summary>
+        /// <param name="boxTower">The boxTower<see cref="List{Brep}"/></param>
+        /// <returns>The <see cref="Mesh"/></returns>
+        private Mesh MeshTower(List<Brep> boxTower)
+        {
+            List<Mesh> allMeshes = new List<Mesh>();
+            foreach (Brep brep in boxTower)
             {
-                Mesh[] temp = Mesh.CreateFromBrep(BoxTower[i], new MeshingParameters());
-                allMeshes.AddRange(temp.ToList());
+                Mesh[] tempMeshes = Mesh.CreateFromBrep(brep, new MeshingParameters());
+                if (tempMeshes != null)
+                    allMeshes.AddRange(tempMeshes);
             }
-
-            //Create  a joined mesh         
-            Mesh All = new Mesh();
-            All.Append(allMeshes);
-            return All;
+            Mesh joinedTowerMesh = new Mesh();
+            joinedTowerMesh.Append(allMeshes);
+            return joinedTowerMesh;
         }
 
-        //Filter the points to keep only the ones that belong to exterior surfaces
-        public void Filter(List<Point3d> allPoints, List<Vector3d> allVectors, Mesh Buildings, Mesh Tower, double search_rad,
-                          out List<Line> FilteredLines, out List<Point3d> FilteredPoints, out List<Vector3d> FilteredVectors)
+        /// <summary>
+        /// Filters points to only those on exterior surfaces and generates rays
+        /// </summary>
+        /// <param name="allPoints">The allPoints<see cref="List{Point3d}"/></param>
+        /// <param name="allVectors">The allVectors<see cref="List{Vector3d}"/></param>
+        /// <param name="buildings">The buildings<see cref="Mesh"/></param>
+        /// <param name="tower">The tower<see cref="Mesh"/></param>
+        /// <param name="searchRadius">The searchRadius<see cref="double"/></param>
+        /// <param name="filteredLines">The filteredLines<see cref="List{Line}"/></param>
+        /// <param name="filteredPoints">The filteredPoints<see cref="List{Point3d}"/></param>
+        /// <param name="filteredVectors">The filteredVectors<see cref="List{Vector3d}"/></param>
+        private void FilterPoints(
+            List<Point3d> allPoints,
+            List<Vector3d> allVectors,
+            Mesh buildings,
+            Mesh tower,
+            double searchRadius,
+            out List<Line> filteredLines,
+            out List<Point3d> filteredPoints,
+            out List<Vector3d> filteredVectors
+        )
         {
-            FilteredLines = new List<Line>();
-            FilteredPoints = new List<Point3d>();
-            FilteredVectors = new List<Vector3d>();
+            filteredLines = new List<Line>();
+            filteredPoints = new List<Point3d>();
+            filteredVectors = new List<Vector3d>();
 
             for (int i = 0; i < allPoints.Count; i++)
             {
-                Point3d[] hitPt0;
-             
-                Point3d startp = allPoints[i] + (allVectors[i] * 0.1);
-                Line extended = new Line(startp, allVectors[i], search_rad);
+                Point3d startPoint = allPoints[i] + (allVectors[i] * 0.1);
+                Line ray = new Line(startPoint, allVectors[i], searchRadius);
 
-                //Get all the intersection Points
-                hitPt0 = Rhino.Geometry.Intersect.Intersection.MeshLine(Tower, extended, out _);
-                if (hitPt0.Length == 0)
+                if (CheckRayIntersection(tower, ray))
+                    continue;
+
+                if (CheckRayIntersection(buildings, ray, out Line finalRay))
                 {
-                    Point3d[] hitPt;
-                    
-
-                    //Get  all the intersection Points
-                    hitPt = Rhino.Geometry.Intersect.Intersection.MeshLine(Buildings, extended, out _);
-
-                    //Some lines hit meshes in multiple faces so get only the first intersection point
-                    if (hitPt.Length > 0)
-                    {
-                        Line ln = new Line(startp, Rhino.Collections.Point3dList.ClosestPointInList(hitPt, startp));
-
-                        FilteredLines.Add(ln);
-                        FilteredPoints.Add(ln.From);
-                        FilteredVectors.Add(allVectors[i]);
-                    }
-                    else
-                    {
-                        //some lines didn't hit anything so create a line from the search point to the max of search_rad
-                        Line ln = new Line(startp, extended.To);
-
-                        FilteredLines.Add(ln);
-                        FilteredPoints.Add(ln.From);
-                        FilteredVectors.Add(allVectors[i]);
-                    }
-
-                }
-            }
-        }
-        //Create colors to give as an output, the colors are defined by the length of the rays
-        //they are useful to give a quick visual impression to the user
-        public List<Color> ColorPoints(List<Line> FilteredLines)
-        {
-            List<Color> Colors = new List<Color>();
-            for (int i = 0; i < FilteredLines.Count; i++)
-            {
-                if(FilteredLines[i].Length/Search_Radius<= 0.333)
-                {
-                    Colors.Add(Color.FromArgb(255, 126, 0));
-                }
-                else if(FilteredLines[i].Length/Search_Radius <=  0.666)
-                {
-                    Colors.Add(Color.FromArgb(253, 255, 74));
+                    filteredLines.Add(finalRay);
                 }
                 else
                 {
-                    Colors.Add(Color.FromArgb(102, 255, 86));
+                    filteredLines.Add(ray);
                 }
-
+                filteredPoints.Add(ray.From);
+                filteredVectors.Add(allVectors[i]);
             }
-
-            return Colors;
         }
 
-        public double RaysSum(List<Line> FilteredLines, double search_rad)
+        /// <summary>
+        /// Checks if the ray intersects with the mesh and returns the resulting line
+        /// </summary>
+        /// <param name="mesh">The mesh<see cref="Mesh"/></param>
+        /// <param name="ray">The ray<see cref="Line"/></param>
+        /// <param name="resultingLine">The resultingLine<see cref="Line"/></param>
+        /// <returns>The <see cref="bool"/></returns>
+        private bool CheckRayIntersection(Mesh mesh, Line ray, out Line resultingLine)
         {
-            double total_length = 0;
-            for (int i = 0; i < FilteredLines.Count; i++)
+            Point3d[] hitPoints = Rhino.Geometry.Intersect.Intersection.MeshLine(mesh, ray, out _);
+            if (hitPoints.Length > 0)
             {
+                Point3d closestHit = Rhino.Collections.Point3dList.ClosestPointInList(
+                    hitPoints,
+                    ray.From
+                );
+                resultingLine = new Line(ray.From, closestHit);
+                return true;
+            }
+            resultingLine = new Line();
+            return false;
+        }
 
-                total_length += FilteredLines[i].Length;
-            }
-            //if all the rays had no obstacles their maximum length would be search_rad
-            //at their sum would be their number* multiplied with their length = search_rad
-            var max_achievable_length = FilteredLines.Count * search_rad;
-            var percentage = total_length / max_achievable_length * 100;
-            return percentage;
+        /// <summary>
+        /// Checks if the ray intersects with the mesh
+        /// </summary>
+        /// <param name="mesh">The mesh<see cref="Mesh"/></param>
+        /// <param name="ray">The ray<see cref="Line"/></param>
+        /// <returns>The <see cref="bool"/></returns>
+        private bool CheckRayIntersection(Mesh mesh, Line ray)
+        {
+            return Rhino.Geometry.Intersect.Intersection.MeshLine(mesh, ray, out _).Length > 0;
         }
- 
+
+        /// <summary>
+        /// Calculates the total visibility percentage based on ray lengths
+        /// </summary>
+        /// <param name="filteredLines">The filteredLines<see cref="List{Line}"/></param>
+        /// <param name="searchRadius">The searchRadius<see cref="double"/></param>
+        /// <returns>The <see cref="double"/></returns>
+        private double CalculateRayVisibility(List<Line> filteredLines, double searchRadius)
+        {
+            double totalLength = filteredLines.Sum(line => line.Length);
+            double maxAchievableLength = filteredLines.Count * searchRadius;
+            return (totalLength / maxAchievableLength) * 100;
+        }
+
+        /// <summary>
+        /// Generates colors based on ray length ratios for visibility indication
+        /// </summary>
+        /// <param name="filteredLines">The filteredLines<see cref="List{Line}"/></param>
+        /// <param name="searchRadius">The searchRadius<see cref="double"/></param>
+        /// <returns>The <see cref="List{Color}"/></returns>
+        private List<Color> GenerateColorMapping(List<Line> filteredLines, double searchRadius)
+        {
+            List<Color> colors = new List<Color>();
+            foreach (Line line in filteredLines)
+            {
+                double ratio = line.Length / searchRadius;
+                if (ratio <= 0.333)
+                    colors.Add(Color.FromArgb(255, 126, 0)); // red: poor visibility
+                else if (ratio <= 0.666)
+                    colors.Add(Color.FromArgb(253, 255, 74)); // orange: medium visibility
+                else
+                    colors.Add(Color.FromArgb(102, 255, 86)); // green: good visibility
+            }
+            return colors;
+        }
+
         /// Provides an Icon for the component.
-        protected override System.Drawing.Bitmap Icon
-        {
-            get
-            {               
-                return Morpho.Properties.Resources.Rays;            
-            }
-        }
-  
-        /// Gets the unique ID for this component. Do not change this ID after release.
-        public override Guid ComponentGuid
-        {
-            get { return new Guid("53b06f70-4fc1-4860-ba8e-67cb04960166"); }
-        }
+
+        /// <summary>
+        /// Gets the Icon
+        /// </summary>
+        protected override System.Drawing.Bitmap Icon => Morpho.Properties.Resources.Rays;
+
+        /// Gets the unique ID for this component.
+
+        /// <summary>
+        /// Gets the ComponentGuid
+        /// </summary>
+        public override Guid ComponentGuid => new Guid("53b06f70-4fc1-4860-ba8e-67cb04960166");
     }
 }
