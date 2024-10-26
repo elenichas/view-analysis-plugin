@@ -1,19 +1,21 @@
 # View Analysis Plugin
 
-This repository contains the **View Analysis Plugin**, a .NET-based tool designed to perform detailed spatial and geometric analysis. The plugin provides functionalities such as ray shooting, tower structure analysis, and view capturing, aimed at supporting architectural or structural analysis tasks.
+This repository contains a  **View Analysis Plugin**, a .NET-based tool designed to perform view analysis on a tower massing. 
+The genetic algorithm component encapsulates the logic of the design and analysis components in order to produce generations of individuals ( towers) perform view analysis in each of them, evaluate them and keep running until it converges.
+## Components
 
-## Features
+- **Design**
+  - **TowerBuildier.cs**
+  
+- **Analysis**
+  - **Ray Shooting.cs** 
+  - **Tower Divider.cs**
+  - **View Capture.cs**
+  
+- **Genetic Algorithm**
+  - **GA.cs**
+  - **GAUtilities.cs**
 
-- **Ray Shooting**: Implements ray tracing for spatial analysis.
-- **Tower Analysis**: Includes tools for building and dividing tower structures.
-- **View Capture**: Captures view data to assist in visualization tasks.
-- **Genetic Algorithm (GA)**: Provides GA capabilities for optimization.
-
-## Repository Structure
-
-- **AnalysisComponents/**: Contains components like `MorphoInfo`, `RayShooter`, `TowerBuilder`, `TowerDivider`, and `ViewCapture`, each responsible for a unique aspect of spatial analysis.
-- **GA/**: Implements a genetic algorithm to optimize certain parameters within the plugin.
-- **Morpho.csproj** and **Morpho.sln**: Project and solution files for building the plugin.
 
 ## Getting Started
 
