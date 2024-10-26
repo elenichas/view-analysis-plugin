@@ -1,9 +1,12 @@
 ﻿namespace Morpho.AnalysisComponents
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Drawing;
     using System.Linq;
+    using System.Threading.Tasks;
     using Grasshopper.Kernel;
     using Rhino.Geometry;
 
@@ -65,6 +68,13 @@
                 GH_ParamAccess.item,
                 200
             );
+            pManager.AddBooleanParameter(
+                "Use Parallel",
+                "Use Parallel",
+                "Set to true to use parallel processing. Default is false (sequential).",
+                GH_ParamAccess.item,
+                false
+            );
         }
 
         /// Registers all the output parameters for this component.
@@ -105,6 +115,12 @@
                 "Colors indicating view quality from each point (red=bad, green=good).",
                 GH_ParamAccess.list
             );
+            pManager.AddNumberParameter(
+                "Execution Time (ms)",
+                "Execution Time",
+                "Time taken to execute the chosen method (in milliseconds).",
+                GH_ParamAccess.item
+            );
         }
 
         /// <summary>
@@ -119,6 +135,7 @@
             List<Point3d> points = new List<Point3d>();
             List<Vector3d> vectors = new List<Vector3d>();
             double searchRadius = 200;
+            bool useParallel = false;
 
             if (!DA.GetDataList(0, tower))
                 return;
@@ -130,33 +147,63 @@
                 return;
             if (!DA.GetData(4, ref searchRadius))
                 return;
+            DA.GetData(5, ref useParallel); // Parallel or Sequential
 
             // Mesh preparation
             Mesh joinedNeighborhood = JoinMeshes(neighborhood);
             Mesh towerMesh = MeshTower(tower);
 
-            // Filter points and generate rays
-            FilterPoints(
-                points,
-                vectors,
-                joinedNeighborhood,
-                towerMesh,
-                searchRadius,
-                out List<Line> filteredLines,
-                out List<Point3d> filteredPoints,
-                out List<Vector3d> filteredVectors
-            );
+            // Define output variables for lines, points, and vectors
+            List<Line> filteredLines;
+            List<Point3d> filteredPoints;
+            List<Vector3d> filteredVectors;
 
-            // Calculate visibility value and colors
+            // Measure execution time
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            // Choose method based on the Use Parallel input
+            if (useParallel)
+            {
+                FilterPointsParallel(
+                    points,
+                    vectors,
+                    joinedNeighborhood,
+                    towerMesh,
+                    searchRadius,
+                    out filteredLines,
+                    out filteredPoints,
+                    out filteredVectors
+                );
+            }
+            else
+            {
+                FilterPointsSequential(
+                    points,
+                    vectors,
+                    joinedNeighborhood,
+                    towerMesh,
+                    searchRadius,
+                    out filteredLines,
+                    out filteredPoints,
+                    out filteredVectors
+                );
+            }
+            stopwatch.Stop();
+
+            DA.SetDataList(0, filteredLines);
+            DA.SetDataList(2, filteredPoints);
+            DA.SetDataList(3, filteredVectors);
+
+            double executionTime = stopwatch.Elapsed.TotalMilliseconds;
+
+            // Calculate visibility value and colors for either case
             double visibilityValue = CalculateRayVisibility(filteredLines, searchRadius);
             List<Color> colorMapping = GenerateColorMapping(filteredLines, searchRadius);
 
             // Set output data
-            DA.SetDataList(0, filteredLines);
             DA.SetData(1, visibilityValue);
-            DA.SetDataList(2, filteredPoints);
-            DA.SetDataList(3, filteredVectors);
             DA.SetDataList(4, colorMapping);
+            DA.SetData(5, executionTime);
         }
 
         /// <summary>
@@ -190,8 +237,10 @@
             return joinedTowerMesh;
         }
 
+        // Sequential version of FilterPoints
+
         /// <summary>
-        /// Filters points to only those on exterior surfaces and generates rays
+        /// The FilterPointsSequential
         /// </summary>
         /// <param name="allPoints">The allPoints<see cref="List{Point3d}"/></param>
         /// <param name="allVectors">The allVectors<see cref="List{Vector3d}"/></param>
@@ -201,7 +250,7 @@
         /// <param name="filteredLines">The filteredLines<see cref="List{Line}"/></param>
         /// <param name="filteredPoints">The filteredPoints<see cref="List{Point3d}"/></param>
         /// <param name="filteredVectors">The filteredVectors<see cref="List{Vector3d}"/></param>
-        private void FilterPoints(
+        private void FilterPointsSequential(
             List<Point3d> allPoints,
             List<Vector3d> allVectors,
             Mesh buildings,
@@ -221,20 +270,77 @@
                 Point3d startPoint = allPoints[i] + (allVectors[i] * 0.1);
                 Line ray = new Line(startPoint, allVectors[i], searchRadius);
 
-                if (CheckRayIntersection(tower, ray))
-                    continue;
-
-                if (CheckRayIntersection(buildings, ray, out Line finalRay))
+                if (!CheckRayIntersection(tower, ray))
                 {
-                    filteredLines.Add(finalRay);
+                    if (CheckRayIntersection(buildings, ray, out Line finalRay))
+                    {
+                        filteredLines.Add(finalRay);
+                    }
+                    else
+                    {
+                        filteredLines.Add(ray);
+                    }
+                    filteredPoints.Add(ray.From);
+                    filteredVectors.Add(allVectors[i]);
                 }
-                else
-                {
-                    filteredLines.Add(ray);
-                }
-                filteredPoints.Add(ray.From);
-                filteredVectors.Add(allVectors[i]);
             }
+        }
+
+        // Parallel version of FilterPoints
+
+        /// <summary>
+        /// The FilterPointsParallel
+        /// </summary>
+        /// <param name="allPoints">The allPoints<see cref="List{Point3d}"/></param>
+        /// <param name="allVectors">The allVectors<see cref="List{Vector3d}"/></param>
+        /// <param name="buildings">The buildings<see cref="Mesh"/></param>
+        /// <param name="tower">The tower<see cref="Mesh"/></param>
+        /// <param name="searchRadius">The searchRadius<see cref="double"/></param>
+        /// <param name="filteredLines">The filteredLines<see cref="List{Line}"/></param>
+        /// <param name="filteredPoints">The filteredPoints<see cref="List{Point3d}"/></param>
+        /// <param name="filteredVectors">The filteredVectors<see cref="List{Vector3d}"/></param>
+        private void FilterPointsParallel(
+            List<Point3d> allPoints,
+            List<Vector3d> allVectors,
+            Mesh buildings,
+            Mesh tower,
+            double searchRadius,
+            out List<Line> filteredLines,
+            out List<Point3d> filteredPoints,
+            out List<Vector3d> filteredVectors
+        )
+        {
+            ConcurrentBag<Line> linesBag = new ConcurrentBag<Line>();
+            ConcurrentBag<Point3d> pointsBag = new ConcurrentBag<Point3d>();
+            ConcurrentBag<Vector3d> vectorsBag = new ConcurrentBag<Vector3d>();
+
+            Parallel.For(
+                0,
+                allPoints.Count,
+                i =>
+                {
+                    Point3d startPoint = allPoints[i] + (allVectors[i] * 0.1);
+                    Line ray = new Line(startPoint, allVectors[i], searchRadius);
+
+                    if (!CheckRayIntersection(tower, ray))
+                    {
+                        if (CheckRayIntersection(buildings, ray, out Line finalRay))
+                        {
+                            linesBag.Add(finalRay);
+                        }
+                        else
+                        {
+                            linesBag.Add(ray);
+                        }
+                        pointsBag.Add(ray.From);
+                        vectorsBag.Add(allVectors[i]);
+                    }
+                }
+            );
+
+            filteredLines = linesBag.ToList();
+            filteredPoints = pointsBag.ToList();
+            filteredVectors = vectorsBag.ToList();
         }
 
         /// <summary>
