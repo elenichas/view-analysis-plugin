@@ -420,7 +420,7 @@ namespace Morpho.GA
                     //evaluate the two offsprings and compare them
                     //the fittest will survive into the population
                    if (x.i_fitness >= y.i_fitness)
-               
+                  //if(rnd.NextDouble()>0.5)
                        pop[0] = x;
                      else
                       pop[0] = y;
